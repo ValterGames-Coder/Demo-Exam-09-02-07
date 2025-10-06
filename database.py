@@ -4,7 +4,6 @@ import config
 
 
 def get_connection():
-    """Устанавливает и возвращает соединение с базой данных."""
     try:
         return psycopg2.connect(**config.DB_SETTINGS)
     except psycopg2.OperationalError as e:
@@ -13,7 +12,6 @@ def get_connection():
 
 
 def _execute_modification(query, params=None):
-    """Выполняет запрос на изменение данных (INSERT, UPDATE, DELETE)."""
     conn = get_connection()
     if not conn:
         raise ConnectionError("Не удалось подключиться к базе данных.")
@@ -27,7 +25,6 @@ def _execute_modification(query, params=None):
 
 
 def fetch_all(query, params=None):
-    """Выполняет запрос и возвращает все записи."""
     conn = get_connection()
     if not conn:
         return []
@@ -41,16 +38,12 @@ def fetch_all(query, params=None):
 
 
 def check_user(login, password):
-    """Проверяет данные пользователя по логину и паролю."""
     query = "SELECT * FROM users WHERE login = %s AND password = %s"
     results = fetch_all(query, (login, password))
     return results[0] if results else None
 
 
 def get_products(filters=None):
-    """
-    Получает список товаров с учетом фильтров и всех видов сортировки.
-    """
     base_query = """
         SELECT
             product_sku, product_name, price, current_discount,
@@ -78,20 +71,17 @@ def get_products(filters=None):
     if where_clauses:
         base_query += " WHERE " + " AND ".join(where_clauses)
 
-    # ИСПРАВЛЕНО: Правильная логика сортировки
     sort_by_stock = filters.get("sort_by") if filters else None
     if sort_by_stock == "stock_quantity":
         order = "ASC" if filters.get("sort_order") == "asc" else "DESC"
         base_query += f" ORDER BY stock_quantity {order}"
     else:
-        # Сортировка по умолчанию (сначала со скидкой)
         base_query += " ORDER BY CASE WHEN current_discount > 0 THEN 0 ELSE 1 END, product_name"
 
     return fetch_all(base_query, tuple(params))
 
 
 def get_orders():
-    """Получает список всех заказов с детальной информацией."""
     query = """
         SELECT o.*, pp.address AS pickup_point_address, u.full_name AS client_name
         FROM orders o
@@ -103,12 +93,10 @@ def get_orders():
 
 
 def get_suppliers():
-    """Возвращает список уникальных поставщиков."""
     return fetch_all("SELECT DISTINCT supplier_name FROM products WHERE supplier_name IS NOT NULL ORDER BY supplier_name")
 
 
 def add_product(data):
-    """Добавляет новый товар в базу данных."""
     query = """
         INSERT INTO products (product_sku, product_name, price, current_discount, stock_quantity,
         category_name, manufacturer_name, supplier_name, description, image_path)
@@ -124,7 +112,6 @@ def add_product(data):
 
 
 def update_product(data):
-    """Обновляет данные существующего товара."""
     query = """
         UPDATE products SET product_name = %s, price = %s, current_discount = %s,
         stock_quantity = %s, category_name = %s, manufacturer_name = %s,
@@ -141,12 +128,10 @@ def update_product(data):
 
 
 def delete_product(sku):
-    """Удаляет товар по его артикулу."""
     _execute_modification("DELETE FROM products WHERE product_sku = %s", (sku,))
 
 
 def add_order(details, items):
-    """Добавляет новый заказ и его состав в базу данных."""
     conn = get_connection()
     if not conn: raise ConnectionError("Нет подключения к БД.")
     try:
@@ -169,7 +154,6 @@ def add_order(details, items):
 
 
 def update_order(details, items):
-    """Обновляет заказ и полностью перезаписывает его состав."""
     conn = get_connection()
     if not conn: raise ConnectionError("Нет подключения к БД.")
     try:
@@ -192,5 +176,4 @@ def update_order(details, items):
 
 
 def delete_order(order_id):
-    """Удаляет заказ (связанные записи удаляются каскадно)."""
     _execute_modification("DELETE FROM orders WHERE order_id = %s", (order_id,))
