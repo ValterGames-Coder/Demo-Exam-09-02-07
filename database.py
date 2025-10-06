@@ -1,4 +1,3 @@
-"""Модуль для взаимодействия с базой данных PostgreSQL."""
 import psycopg2
 from psycopg2.extras import DictCursor
 import config
