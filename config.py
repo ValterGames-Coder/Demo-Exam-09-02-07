@@ -37,11 +37,11 @@ FONT_CARD_ACCENT = ("Times New Roman", 12, "bold")
 
 # Пути
 RESOURCES_DIR = "./resources/"
-LOGO_PATH = os.path.join(RESOURCES_DIR, "Icon.png")
-ICON_PATH = os.path.join(RESOURCES_DIR, "Icon.ico")
+LOGO_PATH = os.path.join(RESOURCES_DIR, "icon.jpg")
+ICON_PATH = os.path.join(RESOURCES_DIR, "icon.ico")
 PLACEHOLDER_IMAGE_PATH = os.path.join(RESOURCES_DIR, "picture.png")
 PRODUCT_IMAGES_DIR = os.path.join(RESOURCES_DIR, "product_images/")
 
 # Размеры изображений
 LOGO_SIZE = (250, 60)
-PRODUCT_IMAGE_SIZE = (150, 150)
+PRODUCT_IMAGE_SIZE = (300, 200)

@@ -1,15 +1,13 @@
-import os
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk, messagebox
 
 import config
 import database
-from ui.main_app_window import MainAppWindow
-
 
 class LoginWindow(tk.Tk):
     def __init__(self):
         super().__init__()
+        self.user_data = None
 
         self.title(config.LOGIN_WINDOW_TITLE.format(app_name=config.APP_NAME))
         self.geometry(config.LOGIN_WINDOW_GEOMETRY)
@@ -80,12 +78,5 @@ class LoginWindow(tk.Tk):
         self.open_main_window(guest_data)
 
     def open_main_window(self, user_data):
+        self.user_data = user_data
         self.destroy()
-        app = MainAppWindow(user_data)
-
-        if os.path.exists(config.ICON_PATH):
-            try:
-                app.iconbitmap(default=config.ICON_PATH)
-            except tk.TclError:
-                print("Ошибка установки иконки для главного окна.")
-        app.mainloop()
