@@ -1,3 +1,5 @@
+"""Модуль, описывающий главное окно приложения."""
+
 import os
 import tkinter as tk
 from tkinter import ttk, font
@@ -18,21 +20,14 @@ class MainAppWindow(tk.Tk):
         self.current_view = 'products'
         self.image_references = []
         self.logged_out = False
+        
+        # ИСПРАВЛЕНО: Правильное форматирование заголовка
         self.title(config.MAIN_WINDOW_TITLE_FORMAT.format(
             app_name=config.APP_NAME,
-            role_name=user_data['role_name']
-        ))
+            role_name=user_data['role_name']))
         
-        if os.path.exists(config.ICON_PATH):
-            try:
-                self.iconbitmap(config.ICON_PATH)
-            except tk.TclError:
-                print(f"Не удалось загрузить иконку: {config.ICON_PATH}")
-
-        self.geometry("1024x768")
-        self.resizable(False, False)
+        self.geometry("1024x768"); self.resizable(False, False)
         self.configure(bg=config.COLOR_MAIN_BG)
-
         self._setup_styles()
         self._create_layout()
         self.load_view()
@@ -54,11 +49,9 @@ class MainAppWindow(tk.Tk):
         style.configure("OutOfStock.Title.TLabel", background="lightblue", font=config.FONT_CARD_TITLE)
         style.configure("OutOfStock.Accent.TLabel", background="lightblue", font=config.FONT_CARD_ACCENT)
         style.configure("OutOfStock.TFrame", background="lightblue")
-
+        
     def _create_layout(self):
-        # --- Верхняя панель (лого, имя) ---
-        top_frame = ttk.Frame(self, padding=10)
-        top_frame.pack(fill='x', side='top', pady=(0, 5))
+        top_frame = ttk.Frame(self, padding=10); top_frame.pack(fill='x', side='top', pady=(0, 5))
         
         if os.path.exists(config.LOGO_PATH):
             try:
@@ -69,22 +62,15 @@ class MainAppWindow(tk.Tk):
                     logo_label = ttk.Label(top_frame, image=logo_img)
                     logo_label.image = logo_img  # Дополнительно, на всякий случай
                     logo_label.pack(side='left', padx=(0, 10))
-                    
             except Exception as e:
                 print(f"Не удалось загрузить логотип: {e}")
 
         ttk.Label(top_frame, text=config.APP_NAME, font=config.FONT_TITLE).pack(side='left')
-        
         ttk.Button(top_frame, text="Выход", command=self.logout).pack(side='right', padx=10)
         ttk.Label(top_frame, text=f"Пользователь: {self.user_data['full_name']}").pack(side='right', padx=10)
 
-        # --- Панель управления (кнопки, поиск) ---
-        self.controls_frame = ttk.Frame(self, padding=(10, 0))
-        self.controls_frame.pack(fill='x')
-
-        # --- Прокручиваемая область ---
-        container = ttk.Frame(self)
-        container.pack(fill="both", expand=True, padx=10, pady=10)
+        self.controls_frame = ttk.Frame(self, padding=(10, 0)); self.controls_frame.pack(fill='x')
+        container = ttk.Frame(self); container.pack(fill="both", expand=True, padx=10, pady=10)
         self.canvas = tk.Canvas(container, bg=config.COLOR_MAIN_BG, highlightthickness=0)
         scrollbar = ttk.Scrollbar(container, orient="vertical", command=self.canvas.yview)
         self.canvas.configure(yscrollcommand=scrollbar.set)
@@ -92,13 +78,12 @@ class MainAppWindow(tk.Tk):
         scrollbar.pack(side="right", fill="y")
         self.scrollable_frame = ttk.Frame(self.canvas)
         self.canvas_window_id = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-
         self.scrollable_frame.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
         self.canvas.bind('<Configure>', lambda e: self.canvas.itemconfig(self.canvas_window_id, width=e.width))
         self.bind_all("<MouseWheel>", self._on_mousewheel)
 
-    def logout(self):
-        self.logged_out = True
+    def logout(self): 
+        self.logged_out = True; 
         self.destroy()
 
     def _on_mousewheel(self, event):
@@ -122,6 +107,14 @@ class MainAppWindow(tk.Tk):
         self.populate_content()
         self.update_idletasks()
         self.canvas.yview_moveto(0)
+
+    def open_product_editor(self, product_sku=None):
+        if self.user_data['role_name'] != 'Администратор': return
+        ProductEditorWindow(self, self.load_view, product_sku)
+
+    def open_order_editor(self, order_data=None):
+        if self.user_data['role_name'] != 'Администратор': return
+        OrderEditorWindow(self, self.load_view, order_data)
 
     def _populate_controls(self):
         for widget in self.controls_frame.winfo_children(): widget.destroy()
@@ -176,14 +169,6 @@ class MainAppWindow(tk.Tk):
         elif self.current_view == 'orders':
             for order in database.get_orders(): self._create_order_card(self.scrollable_frame, order)
 
-    def open_product_editor(self, product_data=None):
-        if self.user_data['role_name'] != 'Администратор': return
-        ProductEditorWindow(self, self.load_view, product_data)
-
-    def open_order_editor(self, order_data=None):
-        if self.user_data['role_name'] != 'Администратор': return
-        OrderEditorWindow(self, self.load_view, order_data)
-
     def _resize_image(self, path, size):
         if not os.path.exists(path):
             return None
@@ -212,18 +197,11 @@ class MainAppWindow(tk.Tk):
         child_style_prefix = ""
         if is_out_of_stock: child_style_prefix = "OutOfStock."
         elif has_discount and product.get('current_discount') > 15: child_style_prefix = "Discount."
-        command = (lambda e, p=product: self.open_product_editor(p)) if is_admin else None
+        command = (lambda e, sku=product['product_sku']: self.open_product_editor(sku)) if self.user_data['role_name'] == 'Администратор' else None
 
         card = ttk.Frame(parent, style=card_style); card.pack(pady=5, fill='x', expand=True)
 
-        img_container = tk.Frame(
-            card,
-            width=300,
-            height=200,
-            bg=config.COLOR_MAIN_BG,
-            highlightbackground="black",
-            highlightthickness=1
-        )
+        img_container = tk.Frame(card, width=300, height=200, bg=config.COLOR_MAIN_BG, highlightbackground="black", highlightthickness=1)
         img_container.pack_propagate(False)
         img_container.pack(side='left', padx=10, pady=10)
 

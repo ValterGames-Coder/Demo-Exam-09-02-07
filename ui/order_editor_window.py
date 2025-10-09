@@ -109,11 +109,21 @@ class OrderEditorWindow(tk.Toplevel):
     def save(self):
         client_id = next((c['user_id'] for c in self.clients if c['full_name'] == self.client_combo.get()), None)
         point_id = next((p['point_id'] for p in self.pickup_points if p['address'] == self.point_combo.get()), None)
+        
+        if not all([self.status_combo.get(), self.order_date_entry.get(), self.delivery_date_entry.get(), client_id, point_id]):
+            messagebox.showerror("Ошибка валидации", "Все поля должны быть заполнены.")
+            return
+
         order_details = {
             "status": self.status_combo.get(), "order_date": self.order_date_entry.get(),
             "delivery_date": self.delivery_date_entry.get(), "client_user_id": client_id, "pickup_point_id": point_id
         }
         items = [{"sku": self.tree.item(r)['values'][0], "qty": int(self.tree.item(r)['values'][2])} for r in self.tree.get_children()]
+        
+        if not items:
+            messagebox.showerror("Ошибка валидации", "В заказе должен быть хотя бы один товар.")
+            return
+
         try:
             if self.is_edit_mode:
                 order_details["order_id"] = self.order_data['order_id']
@@ -121,16 +131,16 @@ class OrderEditorWindow(tk.Toplevel):
             else:
                 database.add_order(order_details, items)
             self.on_close()
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось сохранить заказ:\n{e}")
+        except Exception:
+            messagebox.showerror("Ошибка сохранения", "Не удалось сохранить заказ. Проверьте, что все поля заполнены корректно и что даты указаны в формате ГГГГ-ММ-ДД.")
 
     def delete(self):
-        if messagebox.askyesno("Подтверждение", "Вы уверены?"):
+        if messagebox.askyesno("Подтверждение", "Вы уверены, что хотите удалить этот заказ? Отменить это действие будет невозможно."):
             try:
                 database.delete_order(self.order_data['order_id'])
                 self.on_close()
-            except Exception as e:
-                messagebox.showerror("Ошибка", f"Не удалось удалить заказ:\n{e}")
+            except Exception:
+                messagebox.showerror("Ошибка удаления", "Не удалось удалить заказ. Пожалуйста, попробуйте еще раз.")
 
     def on_close(self):
         self.callback()

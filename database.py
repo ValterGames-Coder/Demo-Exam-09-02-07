@@ -13,28 +13,24 @@ def get_connection():
 
 def _execute_modification(query, params=None):
     conn = get_connection()
-    if not conn:
-        raise ConnectionError("Не удалось подключиться к базе данных.")
+    if not conn: raise ConnectionError("Не удалось подключиться к базе данных.")
     try:
         with conn.cursor() as cursor:
             cursor.execute(query, params)
             conn.commit()
     finally:
-        if conn:
-            conn.close()
+        if conn: conn.close()
 
 
 def fetch_all(query, params=None):
     conn = get_connection()
-    if not conn:
-        return []
+    if not conn: return []
     try:
         with conn.cursor(cursor_factory=DictCursor) as cursor:
             cursor.execute(query, params)
             return cursor.fetchall()
     finally:
-        if conn:
-            conn.close()
+        if conn: conn.close()
 
 
 def check_user(login, password):
@@ -44,42 +40,84 @@ def check_user(login, password):
 
 
 def get_products(filters=None):
+    # ИСПРАВЛЕНО: Запрос переписан с использованием JOIN
     base_query = """
         SELECT
-            product_sku, product_name, price, current_discount,
-            stock_quantity, image_path, category_name,
-            manufacturer_name, supplier_name, description, unit
-        FROM products
+            p.product_sku, p.product_name, p.price, p.current_discount,
+            p.stock_quantity, p.image_path, p.description, p.unit,
+            c.category_name, m.manufacturer_name, s.supplier_name
+        FROM products p
+        LEFT JOIN categories c ON p.category_id = c.category_id
+        LEFT JOIN manufacturers m ON p.manufacturer_id = m.manufacturer_id
+        LEFT JOIN suppliers s ON p.supplier_id = s.supplier_id
     """
-    where_clauses = []
-    params = []
-
+    where_clauses, params = [], []
+    order_clause = "ORDER BY CASE WHEN p.current_discount > 0 THEN 0 ELSE 1 END, p.product_name"
     if filters:
         search_query = filters.get("search_query")
         if search_query:
-            search_term = f"%{search_query}%"
-            where_clauses.append(
-                "(product_name ILIKE %s OR product_sku ILIKE %s OR description ILIKE %s)"
-            )
-            params.extend([search_term, search_term, search_term])
-        
-        supplier = filters.get("supplier")
-        if supplier and supplier != "Все поставщики":
-            where_clauses.append("supplier_name = %s")
-            params.append(supplier)
-
+            where_clauses.append("(p.product_name ILIKE %s OR p.product_sku ILIKE %s OR p.description ILIKE %s)")
+            params.extend([f"%{search_query}%"] * 3)
+        if filters.get("sort_by") == "stock_quantity":
+            order = "ASC" if filters.get("sort_order") == "asc" else "DESC"
+            order_clause = f"ORDER BY p.stock_quantity {order}, p.product_name"
     if where_clauses:
         base_query += " WHERE " + " AND ".join(where_clauses)
-
-    sort_by_stock = filters.get("sort_by") if filters else None
-    if sort_by_stock == "stock_quantity":
-        order = "ASC" if filters.get("sort_order") == "asc" else "DESC"
-        base_query += f" ORDER BY stock_quantity {order}"
-    else:
-        base_query += " ORDER BY CASE WHEN current_discount > 0 THEN 0 ELSE 1 END, product_name"
-
+    base_query += f" {order_clause}"
     return fetch_all(base_query, tuple(params))
 
+
+def get_full_product_info(sku):
+    query = """
+        SELECT p.*, c.category_name, m.manufacturer_name, s.supplier_name
+        FROM products p
+        LEFT JOIN categories c ON p.category_id = c.category_id
+        LEFT JOIN manufacturers m ON p.manufacturer_id = m.manufacturer_id
+        LEFT JOIN suppliers s ON p.supplier_id = s.supplier_id
+        WHERE p.product_sku = %s
+    """
+    results = fetch_all(query, (sku,))
+    return results[0] if results else None
+
+
+def get_suppliers(): return fetch_all("SELECT * FROM suppliers ORDER BY supplier_name")
+def get_categories(): return fetch_all("SELECT * FROM categories ORDER BY category_name")
+def get_manufacturers(): return fetch_all("SELECT * FROM manufacturers ORDER BY manufacturer_name")
+
+
+def add_product(data):
+    query = """
+        INSERT INTO products (product_sku, product_name, price, current_discount, stock_quantity,
+        description, image_path, category_id, manufacturer_id, supplier_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    params = (
+        data['product_sku'], data['product_name'], float(data.get('price', 0)),
+        int(data.get('current_discount', 0)), int(data.get('stock_quantity', 0)),
+        data.get('description'), data.get('image_path'),
+        data.get('category_id'), data.get('manufacturer_id'), data.get('supplier_id')
+    )
+    _execute_modification(query, params)
+
+
+def update_product(data):
+    query = """
+        UPDATE products SET product_name = %s, price = %s, current_discount = %s,
+        stock_quantity = %s, description = %s, image_path = %s,
+        category_id = %s, manufacturer_id = %s, supplier_id = %s
+        WHERE product_sku = %s
+    """
+    params = (
+        data['product_name'], float(data.get('price', 0)), int(data.get('current_discount', 0)),
+        int(data.get('stock_quantity', 0)), data.get('description'), data.get('image_path'),
+        data.get('category_id'), data.get('manufacturer_id'), data.get('supplier_id'),
+        data['product_sku']
+    )
+    _execute_modification(query, params)
+
+
+def delete_product(sku):
+    _execute_modification("DELETE FROM products WHERE product_sku = %s", (sku,))
 
 def get_orders():
     query = """
@@ -90,45 +128,6 @@ def get_orders():
         ORDER BY o.order_date DESC;
     """
     return fetch_all(query)
-
-
-def get_suppliers():
-    return fetch_all("SELECT DISTINCT supplier_name FROM products WHERE supplier_name IS NOT NULL ORDER BY supplier_name")
-
-
-def add_product(data):
-    query = """
-        INSERT INTO products (product_sku, product_name, price, current_discount, stock_quantity,
-        category_name, manufacturer_name, supplier_name, description, image_path)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-    """
-    params = (
-        data['product_sku'], data['product_name'], float(data.get('price', 0)),
-        int(data.get('current_discount', 0)), int(data.get('stock_quantity', 0)),
-        data.get('category_name'), data.get('manufacturer_name'), data.get('supplier_name'),
-        data.get('description'), data.get('image_path')
-    )
-    _execute_modification(query, params)
-
-
-def update_product(data):
-    query = """
-        UPDATE products SET product_name = %s, price = %s, current_discount = %s,
-        stock_quantity = %s, category_name = %s, manufacturer_name = %s,
-        supplier_name = %s, description = %s, image_path = %s
-        WHERE product_sku = %s
-    """
-    params = (
-        data['product_name'], float(data.get('price', 0)), int(data.get('current_discount', 0)),
-        int(data.get('stock_quantity', 0)), data.get('category_name'),
-        data.get('manufacturer_name'), data.get('supplier_name'),
-        data.get('description'), data.get('image_path'), data['product_sku']
-    )
-    _execute_modification(query, params)
-
-
-def delete_product(sku):
-    _execute_modification("DELETE FROM products WHERE product_sku = %s", (sku,))
 
 
 def add_order(details, items):
